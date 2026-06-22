@@ -905,8 +905,8 @@
           <button class="btn btn-secondary" id="soccerReset">다시하기</button>
         </div>
         <p class="game-help">
-          <kbd>Z</kbd> 누르고 있으면 슈팅 게이지 · 놓으면 발사 ·
-          <kbd>X</kbd> 패스 · <kbd>C</kbd> 태클 <span style="opacity:0.7">(재사용 대기)</span>
+          <kbd>Z</kbd><kbd>X</kbd><kbd>C</kbd> 누르면 바로 시작 ·
+          <kbd>Z</kbd> 홀드 슈팅 · <kbd>X</kbd> 패스 · <kbd>C</kbd> 태클
         </p>
       </div>
     </section>
@@ -1617,6 +1617,80 @@
         return `${n}vs${n}`;
       }
 
+      function ensureGameStarted() {
+        if (state.running && !state.paused) return;
+        if (state.scoreP >= MAX_GOALS || state.scoreC >= MAX_GOALS) resetMatch();
+        state.running = true;
+        state.paused = false;
+        updateHud();
+      }
+
+      function teamOf(p) {
+        return p.team === "blue" ? blue : red;
+      }
+
+      function enemiesOf(p) {
+        return p.team === "blue" ? red : blue;
+      }
+
+      function getHomePosition(p) {
+        const team = teamOf(p);
+        const idx = team.indexOf(p);
+        const count = team.length;
+        const isBlue = p.team === "blue";
+        const padY = 24 + p.r;
+        const usableH = H - padY * 2;
+        const y = padY + (usableH * (idx + 0.5)) / count;
+        const row = Math.floor(idx / 2);
+        const baseX = isBlue ? W * 0.2 : W * 0.8;
+        const xOffset = row * 22 * (isBlue ? 1 : -1);
+        return { x: baseX + xOffset, y };
+      }
+
+      function pickChaser(team) {
+        const ai = team.filter((pl) => !pl.human);
+        const pool = ai.length ? ai : team;
+        if (ball.holder && ball.holder.team !== team[0]?.team) {
+          return pool.reduce((best, pl) =>
+            dist(pl, ball.holder) < dist(best, ball.holder) ? pl : best
+          );
+        }
+        return pool.reduce((best, pl) =>
+          dist(pl, ball) < dist(best, ball) ? pl : best
+        );
+      }
+
+      function bestOpenMate(p) {
+        const mates = teamOf(p).filter((m) => m !== p);
+        const enemies = enemiesOf(p);
+        if (!mates.length) return null;
+        return mates.reduce((best, m) => {
+          const forward = p.team === "blue" ? m.x - p.x : p.x - m.x;
+          const space = Math.min(...enemies.map((e) => dist(m, e)));
+          const score = forward * 0.6 + space * 1.2;
+          const bestForward = p.team === "blue" ? best.x - p.x : p.x - best.x;
+          const bestSpace = Math.min(...enemies.map((e) => dist(best, e)));
+          const bestScore = bestForward * 0.6 + bestSpace * 1.2;
+          return score > bestScore ? m : best;
+        });
+      }
+
+      function moveToward(p, tx, ty, speed) {
+        const dx = tx - p.x;
+        const dy = ty - p.y;
+        const len = Math.hypot(dx, dy) || 1;
+        p.vx = (dx / len) * speed;
+        p.vy = (dy / len) * speed;
+      }
+
+      function passToMate(p, mate) {
+        if (ball.holder !== p || !mate) return;
+        const dx = mate.x - p.x;
+        const dy = mate.y - p.y;
+        const len = Math.hypot(dx, dy) || 1;
+        kickBall(p, (dx / len) * 7.5, (dy / len) * 7.5);
+      }
+
       function resetKickoff() {
         initTeams();
         ball = { x: W / 2, y: H / 2, vx: 0, vy: 0, r: BR, holder: null, kickCd: 0 };
@@ -1741,42 +1815,92 @@
       }
 
       function updateAI(p) {
-        const goalX = p.team === "blue" ? W - GOAL_W : GOAL_W;
-        const defendX = p.team === "blue" ? W * 0.35 : W * 0.65;
+        const isBlue = p.team === "blue";
+        const goalX = isBlue ? W - GOAL_W : GOAL_W;
+        const ownGoalX = isBlue ? GOAL_W : W - GOAL_W;
+        const team = teamOf(p);
+        const enemies = enemiesOf(p);
+        const home = getHomePosition(p);
+        const chaser = pickChaser(team);
+        const amChaser = p === chaser;
 
         if (ball.holder === p) {
-          const mate = teammate(p);
           const toGoal = Math.abs(p.x - goalX);
-          if (toGoal < 130 && Math.random() < 0.04) shoot(p, 0.55 + Math.random() * 0.4);
-          else if (mate && dist(p, mate) > 80 && Math.random() < 0.025) passBall(p);
-          else {
-            p.vx = clamp((goalX - p.x) * 0.04, -3.5, 3.5);
-            p.vy = clamp((H / 2 - p.y) * 0.04, -3.5, 3.5);
+          const openMate = bestOpenMate(p);
+          if (toGoal < 120 && Math.random() < 0.045) {
+            shoot(p, 0.6 + Math.random() * 0.35);
+          } else if (openMate && toGoal > 90 && Math.random() < 0.03) {
+            passToMate(p, openMate);
+          } else if (openMate && dist(p, openMate) > 100 && Math.random() < 0.02) {
+            passToMate(p, openMate);
+          } else {
+            const laneY = H / 2 + (Math.random() - 0.5) * 40;
+            moveToward(p, goalX, laneY, 3.2);
           }
           return;
         }
 
         if (p.tackleT > 0) return;
 
-        const target = ball.holder && ball.holder.team !== p.team ? ball.holder : null;
-        let tx = target ? target.x : ball.x;
-        let ty = target ? target.y : ball.y;
+        const weHaveBall = ball.holder && ball.holder.team === p.team;
+        const theyHaveBall = ball.holder && ball.holder.team !== p.team;
+        let tx;
+        let ty;
+        let speed = 2.9;
 
-        if (!ball.holder && dist(p, ball) > 120) {
-          tx = ball.x * 0.6 + defendX * 0.4;
-          ty = ball.y * 0.6 + (H / 2) * 0.4;
+        if (weHaveBall) {
+          const holder = ball.holder;
+          const idx = team.indexOf(p);
+          const spread = (idx - (team.length - 1) / 2) * 42;
+          const attackX = isBlue ? W * 0.58 : W * 0.42;
+          tx = attackX + (idx % 2) * 18 * (isBlue ? 1 : -1);
+          ty = holder.y + spread * 0.7;
+          ty = clamp(ty, 30, H - 30);
+          speed = 3.1;
+        } else if (theyHaveBall) {
+          const holder = ball.holder;
+          if (amChaser) {
+            tx = holder.x + (isBlue ? -18 : 18);
+            ty = holder.y + (p.y - holder.y) * 0.15;
+            speed = 3.7;
+          } else {
+            const blockX = ownGoalX + (holder.x - ownGoalX) * 0.52;
+            tx = blockX;
+            ty = home.y * 0.35 + holder.y * 0.65;
+            const mark = enemies.reduce((best, e) =>
+              dist(p, e) < dist(p, best) ? e : best
+            );
+            if (dist(p, mark) < 130 && mark !== holder) {
+              tx = tx * 0.45 + mark.x * 0.55;
+              ty = ty * 0.45 + mark.y * 0.55;
+            }
+            speed = 2.7;
+          }
+        } else {
+          if (amChaser) {
+            tx = ball.x + ball.vx * 10;
+            ty = ball.y + ball.vy * 10;
+            speed = 3.5;
+          } else {
+            tx = home.x + (isBlue ? 35 : -35);
+            ty = home.y;
+            const nearestEnemy = enemies.reduce((best, e) =>
+              dist(p, e) < dist(p, best) ? e : best
+            );
+            if (dist(nearestEnemy, ball) < dist(p, ball) + 40) {
+              tx = tx * 0.5 + nearestEnemy.x * 0.5;
+              ty = ty * 0.5 + nearestEnemy.y * 0.5;
+            }
+            speed = 2.6;
+          }
         }
 
-        const dx = tx - p.x;
-        const dy = ty - p.y;
-        const len = Math.hypot(dx, dy) || 1;
-        p.vx = (dx / len) * 3.2;
-        p.vy = (dy / len) * 3.2;
+        moveToward(p, tx, ty, speed);
 
-        if (ball.holder && ball.holder.team !== p.team && dist(p, ball.holder) < 36 && p.tackleCd <= 0) {
-          tackle(p);
-        } else if (!ball.holder && dist(p, ball) < 28 && p.tackleCd <= 0 && Math.random() < 0.03) {
-          tackle(p);
+        if (theyHaveBall && dist(p, ball.holder) < p.r + ball.holder.r + 10 && p.tackleCd <= 0) {
+          if (amChaser || Math.random() < 0.015) tackle(p);
+        } else if (!ball.holder && amChaser && dist(p, ball) < p.r + ball.r + 8 && p.tackleCd <= 0) {
+          if (Math.random() < 0.04) tackle(p);
         }
       }
 
@@ -2093,7 +2217,16 @@
 
       function onKeyDown(e) {
         if (!document.getElementById("panel-soccer").classList.contains("active")) return;
+        const isAction = e.key === "z" || e.key === "Z" || e.key === "x" || e.key === "X" || e.key === "c" || e.key === "C";
+        if (isAction) ensureGameStarted();
         keys[e.key] = true;
+        if (e.key === "z" || e.key === "Z") {
+          const p = human();
+          if (p && ball.holder === p) {
+            shootCharging = true;
+            if (shootCharge < 0.05) shootCharge = 0.05;
+          }
+        }
         if (e.key === "x" || e.key === "X") xPressed = true;
         if (e.key === "c" || e.key === "C") cPressed = true;
         if (["ArrowUp", "ArrowDown", "ArrowLeft", "ArrowRight"].includes(e.key)) e.preventDefault();
@@ -2103,6 +2236,7 @@
         if (!document.getElementById("panel-soccer").classList.contains("active")) return;
         keys[e.key] = false;
         if (e.key === "z" || e.key === "Z") {
+          ensureGameStarted();
           const p = human();
           if (p && ball.holder === p) {
             shootQueued = Math.max(shootCharge, 0.15);
