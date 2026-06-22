@@ -1521,9 +1521,10 @@
       const ctx = canvas.getContext("2d");
       const W = canvas.width;
       const H = canvas.height;
-      const GOAL_W = 14;
+      const GOAL_W = 22;
       const GOAL_H = 110;
       const GOAL_Y = (H - GOAL_H) / 2;
+      const FIELD_PAD = 8;
       const PR = 16;
       const BR = 8;
       const MAX_GOALS = 5;
@@ -1594,15 +1595,21 @@
         else st.textContent = `${MAX_GOALS}골 선승`;
       }
 
+      function inGoalMouthY(y) {
+        return y >= GOAL_Y + 4 && y <= GOAL_Y + GOAL_H - 4;
+      }
+
       function kickBall(p, vx, vy) {
         ball.holder = null;
         ball.kickCd = 22;
         ball.vx = vx;
         ball.vy = vy;
         const len = Math.hypot(vx, vy) || 1;
-        const offset = p.r + ball.r + 16;
+        const offset = p.r + ball.r + 12;
         ball.x = p.x + (vx / len) * offset;
         ball.y = p.y + (vy / len) * offset;
+        ball.x = clamp(ball.x, FIELD_PAD + ball.r, W - FIELD_PAD - ball.r);
+        ball.y = clamp(ball.y, FIELD_PAD + ball.r, H - FIELD_PAD - ball.r);
       }
 
       function shoot(p, powerRatio) {
@@ -1767,36 +1774,74 @@
         }
       }
 
+      function checkGoal(prevX) {
+        if (!inGoalMouthY(ball.y)) return false;
+
+        const crossedLeft = prevX > GOAL_W && ball.x <= GOAL_W + ball.r;
+        const crossedRight = prevX < W - GOAL_W && ball.x >= W - GOAL_W - ball.r;
+        const insideLeft = ball.x <= GOAL_W;
+        const insideRight = ball.x >= W - GOAL_W;
+
+        if (insideLeft || crossedLeft) {
+          state.scoreC++;
+          state.msg = "🔴 CPU 득점!";
+          state.msgTimer = 90;
+          onGoal();
+          return true;
+        }
+        if (insideRight || crossedRight) {
+          state.scoreP++;
+          state.msg = "⚽ 골!";
+          state.msgTimer = 90;
+          onGoal();
+          return true;
+        }
+        return false;
+      }
+
       function updateBallFree() {
         if (ball.holder) return;
+        const prevX = ball.x;
         ball.x += ball.vx;
         ball.y += ball.vy;
         ball.vx *= FRICTION;
         ball.vy *= FRICTION;
 
-        if (ball.y - ball.r < 8 || ball.y + ball.r > H - 8) {
-          ball.vy *= -0.75;
-          ball.y = clamp(ball.y, 8 + ball.r, H - 8 - ball.r);
+        if (checkGoal(prevX)) return;
+
+        const mouthY = inGoalMouthY(ball.y);
+
+        if (ball.y - ball.r < FIELD_PAD) {
+          ball.vy = Math.abs(ball.vy) * 0.55;
+          ball.y = FIELD_PAD + ball.r;
+        }
+        if (ball.y + ball.r > H - FIELD_PAD) {
+          ball.vy = -Math.abs(ball.vy) * 0.55;
+          ball.y = H - FIELD_PAD - ball.r;
         }
 
-        const inGoalY = ball.y > GOAL_Y && ball.y < GOAL_Y + GOAL_H;
-        if (ball.x + ball.r < GOAL_W && inGoalY) {
-          state.scoreC++;
-          state.msg = "🔴 CPU 득점!";
-          state.msgTimer = 90;
-          onGoal();
-          return;
-        }
-        if (ball.x - ball.r > W - GOAL_W && inGoalY) {
-          state.scoreP++;
-          state.msg = "⚽ 골!";
-          state.msgTimer = 90;
-          onGoal();
-          return;
+        if (ball.x - ball.r < FIELD_PAD) {
+          if (!mouthY) {
+            ball.vx = Math.abs(ball.vx) * 0.55;
+            ball.x = FIELD_PAD + ball.r;
+          }
+        } else if (ball.x + ball.r > W - FIELD_PAD) {
+          if (!mouthY) {
+            ball.vx = -Math.abs(ball.vx) * 0.55;
+            ball.x = W - FIELD_PAD - ball.r;
+          }
         }
 
-        if (ball.x < 8 + ball.r) { ball.x = 8 + ball.r; ball.vx *= -0.6; }
-        if (ball.x > W - 8 - ball.r) { ball.x = W - 8 - ball.r; ball.vx *= -0.6; }
+        if (!mouthY) {
+          if (ball.x < GOAL_W + ball.r && ball.x > FIELD_PAD) {
+            ball.vx = Math.abs(ball.vx) * 0.55;
+            ball.x = GOAL_W + ball.r;
+          }
+          if (ball.x > W - GOAL_W - ball.r && ball.x < W - FIELD_PAD) {
+            ball.vx = -Math.abs(ball.vx) * 0.55;
+            ball.x = W - GOAL_W - ball.r;
+          }
+        }
 
         if (Math.abs(ball.vx) < 0.05) ball.vx = 0;
         if (Math.abs(ball.vy) < 0.05) ball.vy = 0;
