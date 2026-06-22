@@ -890,8 +890,8 @@
           <button class="btn btn-secondary" id="soccerReset">다시하기</button>
         </div>
         <p class="game-help">
-          <kbd>←</kbd><kbd>→</kbd><kbd>↑</kbd><kbd>↓</kbd> 이동 ·
-          <kbd>Z</kbd> 슈팅 · <kbd>X</kbd> 패스 · <kbd>C</kbd> 태클
+          <kbd>Z</kbd> 누르고 있으면 슈팅 게이지 · 놓으면 발사 ·
+          <kbd>X</kbd> 패스 · <kbd>C</kbd> 태클 <span style="opacity:0.7">(재사용 대기)</span>
         </p>
       </div>
     </section>
@@ -1528,10 +1528,16 @@
       const BR = 8;
       const MAX_GOALS = 5;
       const FRICTION = 0.94;
+      const TACKLE_CD = 120;
+      const TACKLE_DURATION = 20;
+      const SHOOT_CHARGE_SPEED = 0.022;
+      const SHOOT_POWER_MIN = 4;
+      const SHOOT_POWER_MAX = 15;
       const keys = {};
-      let zPressed = false;
       let xPressed = false;
       let cPressed = false;
+      let shootCharge = 0;
+      let shootCharging = false;
 
       const state = { running: false, paused: true, scoreP: 0, scoreC: 0, msg: "", msgTimer: 0 };
       let blue = [];
@@ -1563,6 +1569,8 @@
       function resetKickoff() {
         initTeams();
         ball = { x: W / 2, y: H / 2, vx: 0, vy: 0, r: BR, holder: null };
+        shootCharge = 0;
+        shootCharging = false;
         state.msg = "킥오프!";
         state.msgTimer = 70;
       }
@@ -1593,10 +1601,16 @@
         ball.y = p.y + (vy / len) * (p.r + ball.r + 2);
       }
 
-      function shoot(p) {
+      function shoot(p, powerRatio) {
         if (ball.holder !== p) return;
         const dir = p.team === "blue" ? 1 : -1;
-        kickBall(p, dir * 10, (Math.random() - 0.5) * 3);
+        const ratio = clamp(powerRatio ?? 0.65, 0.08, 1);
+        const power = SHOOT_POWER_MIN + (SHOOT_POWER_MAX - SHOOT_POWER_MIN) * ratio;
+        const goalY = H / 2;
+        const aimY = clamp((goalY - p.y) * 0.06, -4, 4);
+        kickBall(p, dir * power, aimY + (Math.random() - 0.5) * 1.5);
+        shootCharge = 0;
+        shootCharging = false;
       }
 
       function passBall(p) {
@@ -1610,8 +1624,8 @@
 
       function tackle(p) {
         if (p.tackleCd > 0) return;
-        p.tackleT = 20;
-        p.tackleCd = 50;
+        p.tackleT = TACKLE_DURATION;
+        p.tackleCd = TACKLE_CD;
         const tx = ball.holder ? ball.holder.x : ball.x;
         const ty = ball.holder ? ball.holder.y : ball.y;
         const dx = tx - p.x;
@@ -1623,36 +1637,37 @@
 
       function updateHumanInput() {
         const p = human();
-        if (!p || ball.holder === p) {
-          p.vx = 0;
-          p.vy = 0;
-          const spd = p.tackleT > 0 ? 0.3 : 4.2;
-          if (keys.ArrowLeft || keys.a) p.vx = -spd;
-          if (keys.ArrowRight || keys.d) p.vx = spd;
-          if (keys.ArrowUp || keys.w) p.vy = -spd;
-          if (keys.ArrowDown || keys.s) p.vy = spd;
-        } else {
-          const spd = p.tackleT > 0 ? 0.2 : 4.2;
-          if (!(p.vx || p.vy) || p.tackleT <= 0) {
-            p.vx = 0;
-            p.vy = 0;
-            if (keys.ArrowLeft || keys.a) p.vx = -spd;
-            if (keys.ArrowRight || keys.d) p.vx = spd;
-            if (keys.ArrowUp || keys.w) p.vy = -spd;
-            if (keys.ArrowDown || keys.s) p.vy = spd;
-          }
+        if (!p) return;
+
+        const zDown = keys.z || keys.Z;
+        const hasBall = ball.holder === p;
+
+        if (hasBall && zDown) {
+          shootCharging = true;
+          shootCharge = Math.min(1, shootCharge + SHOOT_CHARGE_SPEED);
+        } else if (!hasBall) {
+          shootCharging = false;
+          if (!zDown) shootCharge = 0;
         }
 
-        if (zPressed) {
-          if (ball.holder === p) shoot(p);
-          zPressed = false;
-        }
+        const moveSpd = (p.tackleT > 0 || shootCharging) ? 2.2 : 4.2;
+        p.vx = 0;
+        p.vy = 0;
+        if (keys.ArrowLeft || keys.a) p.vx = -moveSpd;
+        if (keys.ArrowRight || keys.d) p.vx = moveSpd;
+        if (keys.ArrowUp || keys.w) p.vy = -moveSpd;
+        if (keys.ArrowDown || keys.s) p.vy = moveSpd;
+
         if (xPressed) {
-          if (ball.holder === p) passBall(p);
+          if (hasBall) {
+            passBall(p);
+            shootCharge = 0;
+            shootCharging = false;
+          }
           xPressed = false;
         }
         if (cPressed) {
-          if (ball.holder !== p) tackle(p);
+          if (!hasBall) tackle(p);
           cPressed = false;
         }
       }
@@ -1664,7 +1679,7 @@
         if (ball.holder === p) {
           const mate = teammate(p);
           const toGoal = Math.abs(p.x - goalX);
-          if (toGoal < 130 && Math.random() < 0.04) shoot(p);
+          if (toGoal < 130 && Math.random() < 0.04) shoot(p, 0.55 + Math.random() * 0.4);
           else if (dist(p, mate) > 80 && Math.random() < 0.025) passBall(p);
           else {
             p.vx = clamp((goalX - p.x) * 0.04, -3.5, 3.5);
@@ -1844,6 +1859,53 @@
         ctx.textAlign = "center";
         ctx.textBaseline = "middle";
         ctx.fillText(p.human ? "YOU" : p.team === "blue" ? "P" : "C", p.x, p.y);
+
+        if (p.human && p.tackleCd > 0) {
+          const ratio = 1 - p.tackleCd / TACKLE_CD;
+          const barW = 36;
+          const bx = p.x - barW / 2;
+          const by = p.y + p.r + 8;
+          ctx.fillStyle = "rgba(0,0,0,0.45)";
+          ctx.fillRect(bx, by, barW, 5);
+          ctx.fillStyle = "#64748b";
+          ctx.fillRect(bx, by, barW * ratio, 5);
+          ctx.strokeStyle = "rgba(255,255,255,0.5)";
+          ctx.lineWidth = 1;
+          ctx.strokeRect(bx, by, barW, 5);
+        }
+      }
+
+      function drawShootGauge() {
+        const p = human();
+        if (!p || !shootCharging || ball.holder !== p) return;
+
+        const barW = 72;
+        const barH = 10;
+        const x = p.x - barW / 2;
+        const y = p.y - p.r - 22;
+
+        ctx.fillStyle = "rgba(0,0,0,0.55)";
+        ctx.fillRect(x - 2, y - 14, barW + 4, barH + 22);
+
+        ctx.fillStyle = "rgba(255,255,255,0.25)";
+        ctx.fillRect(x, y, barW, barH);
+
+        const grad = ctx.createLinearGradient(x, 0, x + barW, 0);
+        grad.addColorStop(0, "#4ade80");
+        grad.addColorStop(0.55, "#fde047");
+        grad.addColorStop(1, "#ef4444");
+        ctx.fillStyle = grad;
+        ctx.fillRect(x, y, barW * shootCharge, barH);
+
+        ctx.strokeStyle = "#fff";
+        ctx.lineWidth = 1.5;
+        ctx.strokeRect(x, y, barW, barH);
+
+        ctx.fillStyle = "#fff";
+        ctx.font = "bold 9px sans-serif";
+        ctx.textAlign = "center";
+        ctx.fillText("슈팅 세기", p.x, y - 4);
+        ctx.fillText(`${Math.round(shootCharge * 100)}%`, p.x, y + barH + 12);
       }
 
       function draw() {
@@ -1858,16 +1920,24 @@
         ctx.lineWidth = 1;
         ctx.stroke();
 
-        if (ball.holder === human()) {
-          ctx.fillStyle = "rgba(255,255,255,0.85)";
+        drawShootGauge();
+
+        const hp = human();
+        if (ball.holder === hp) {
+          ctx.fillStyle = "rgba(255,255,255,0.9)";
           ctx.font = "bold 11px sans-serif";
           ctx.textAlign = "left";
-          ctx.fillText("Z:슈팅 X:패스", 14, H - 14);
-        } else if (!ball.holder || ball.holder.team === "blue") {
-          ctx.fillStyle = "rgba(255,255,255,0.85)";
+          ctx.fillText("Z:누르고 있으면 게이지 · 놓으면 슈팅  X:패스", 14, H - 14);
+        } else if (hp) {
+          ctx.fillStyle = "rgba(255,255,255,0.9)";
           ctx.font = "bold 11px sans-serif";
           ctx.textAlign = "left";
-          ctx.fillText("C:태클", 14, H - 14);
+          if (hp.tackleCd > 0) {
+            const sec = (hp.tackleCd / 60).toFixed(1);
+            ctx.fillText(`C:태클 (재사용 ${sec}초)`, 14, H - 14);
+          } else {
+            ctx.fillText("C:태클", 14, H - 14);
+          }
         }
 
         if (state.msgTimer > 0) {
@@ -1891,13 +1961,30 @@
       function onKeyDown(e) {
         if (!document.getElementById("panel-soccer").classList.contains("active")) return;
         keys[e.key] = true;
-        if (e.key === "z" || e.key === "Z") zPressed = true;
+        if (e.key === "z" || e.key === "Z") {
+          const p = human();
+          if (p && ball.holder === p) {
+            shootCharging = true;
+            if (shootCharge < 0.05) shootCharge = 0.05;
+          }
+        }
         if (e.key === "x" || e.key === "X") xPressed = true;
         if (e.key === "c" || e.key === "C") cPressed = true;
         if (["ArrowUp", "ArrowDown", "ArrowLeft", "ArrowRight"].includes(e.key)) e.preventDefault();
       }
 
-      function onKeyUp(e) { keys[e.key] = false; }
+      function onKeyUp(e) {
+        keys[e.key] = false;
+        if (e.key === "z" || e.key === "Z") {
+          const p = human();
+          if (p && ball.holder === p && shootCharging) {
+            shoot(p, shootCharge);
+          } else {
+            shootCharge = 0;
+            shootCharging = false;
+          }
+        }
+      }
 
       window.addEventListener("keydown", onKeyDown);
       window.addEventListener("keyup", onKeyUp);
