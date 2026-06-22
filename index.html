@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>로또 번호 생성기 · 사주 추천</title>
+  <title>복권 번호 생성기 · 사주 추천</title>
   <style>
     *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 
@@ -23,6 +23,9 @@
       --red: #ef4444;
       --gray: #6b7280;
       --green: #22c55e;
+      --pension: #10b981;
+      --pension-hover: #34d399;
+      --pension-dim: #059669;
     }
 
     body {
@@ -53,6 +56,7 @@
 
     .tabs {
       display: flex;
+      flex-wrap: wrap;
       gap: 0.5rem;
       justify-content: center;
       margin-top: 1.5rem;
@@ -82,6 +86,12 @@
       background: linear-gradient(135deg, var(--gold), var(--gold-dim));
       border-color: var(--gold);
       color: #1a1208;
+    }
+
+    .tab.pension.active {
+      background: linear-gradient(135deg, var(--pension), var(--pension-dim));
+      border-color: var(--pension);
+      color: #fff;
     }
 
     main {
@@ -159,6 +169,14 @@
     }
 
     .btn-primary:hover:not(:disabled) { background: var(--accent-hover); }
+
+    .btn-pension {
+      background: linear-gradient(135deg, var(--pension), var(--pension-dim));
+      color: #fff;
+      box-shadow: 0 4px 20px rgba(16, 185, 129, 0.35);
+    }
+
+    .btn-pension:hover:not(:disabled) { background: var(--pension-hover); }
 
     .btn-gold {
       background: linear-gradient(135deg, var(--gold), var(--gold-dim));
@@ -264,6 +282,67 @@
     }
 
     .legend-dot { width: 12px; height: 12px; border-radius: 50%; }
+
+    /* 연금복권 */
+    .pension-row {
+      flex-direction: column;
+      align-items: stretch;
+      gap: 0.75rem;
+    }
+
+    .pension-row .row-top {
+      display: flex;
+      align-items: center;
+      gap: 1rem;
+    }
+
+    .pension-group {
+      display: flex;
+      align-items: center;
+      gap: 0.35rem;
+      background: rgba(16, 185, 129, 0.12);
+      border: 1px solid rgba(16, 185, 129, 0.35);
+      border-radius: 10px;
+      padding: 0.4rem 0.85rem;
+      font-weight: 800;
+      color: var(--pension);
+      white-space: nowrap;
+    }
+
+    .pension-group .num {
+      font-size: 1.4rem;
+      line-height: 1;
+    }
+
+    .pension-digits {
+      display: flex;
+      gap: 0.4rem;
+      flex: 1;
+      justify-content: center;
+      flex-wrap: wrap;
+    }
+
+    .pension-digit {
+      width: 40px;
+      height: 48px;
+      border-radius: 8px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 1.25rem;
+      font-weight: 800;
+      color: #fff;
+      background: linear-gradient(145deg, #34d399, var(--pension-dim));
+      box-shadow: inset 0 -2px 4px rgba(0,0,0,0.2), 0 2px 6px rgba(0,0,0,0.2);
+      animation: pop 0.35s cubic-bezier(0.34, 1.56, 0.64, 1) backwards;
+    }
+
+    .pension-full {
+      text-align: center;
+      font-size: 0.85rem;
+      color: var(--text-muted);
+      letter-spacing: 0.05em;
+    }
 
     /* 사주 챗봇 */
     .saju-form {
@@ -421,10 +500,11 @@
 </head>
 <body>
   <header class="hero">
-    <h1>🎱 로또 번호 생성기</h1>
-    <p>랜덤 추첨 · 사주 AI 추천</p>
+    <h1>🎱 복권 번호 생성기</h1>
+    <p>로또 · 연금복권 · 사주 AI 추천</p>
     <nav class="tabs">
-      <button class="tab active" data-tab="random">🍀 랜덤 생성</button>
+      <button class="tab active" data-tab="random">🍀 로또</button>
+      <button class="tab pension" data-tab="pension">💰 연금복권</button>
       <button class="tab saju" data-tab="saju">🔮 사주 추천</button>
     </nav>
   </header>
@@ -459,6 +539,34 @@
         <span class="legend-item"><span class="legend-dot" style="background:var(--red)"></span>21~30</span>
         <span class="legend-item"><span class="legend-dot" style="background:var(--gray)"></span>31~40</span>
         <span class="legend-item"><span class="legend-dot" style="background:var(--green)"></span>41~45</span>
+      </div>
+    </section>
+
+    <!-- 연금복권 -->
+    <section class="panel" id="panel-pension">
+      <div class="controls">
+        <div class="control-group">
+          <label for="pensionCount">게임 수</label>
+          <select id="pensionCount">
+            <option value="1">1게임</option>
+            <option value="3">3게임</option>
+            <option value="5" selected>5게임</option>
+            <option value="10">10게임</option>
+          </select>
+        </div>
+        <button class="btn btn-pension" id="pensionGenerate">번호 생성</button>
+        <button class="btn btn-secondary" id="pensionClear">초기화</button>
+      </div>
+
+      <div class="results" id="pensionResults">
+        <div class="empty-state">
+          <div class="icon">💰</div>
+          <p>연금복권720+ 번호를 생성해 보세요!<br><span style="font-size:0.85rem">1~7조 + 6자리(0~9)</span></p>
+        </div>
+      </div>
+
+      <div class="legend">
+        <span class="legend-item">연금복권720+ 형식: 조(1~7) + 6자리 번호</span>
       </div>
     </section>
 
@@ -564,6 +672,68 @@
         <div class="empty-state">
           <div class="icon">🍀</div>
           <p>버튼을 눌러 행운의 번호를 받아보세요!</p>
+        </div>`;
+    });
+
+    /* 연금복권720+ */
+    function generatePensionSet() {
+      const group = Math.floor(Math.random() * 7) + 1;
+      const digits = Array.from({ length: 6 }, () => Math.floor(Math.random() * 10));
+      return { group, digits };
+    }
+
+    function renderPensionDigit(d, delay) {
+      const el = document.createElement("span");
+      el.className = "pension-digit";
+      el.textContent = d;
+      el.style.animationDelay = `${delay}ms`;
+      return el;
+    }
+
+    function renderPensionRow({ group, digits }, index) {
+      const row = document.createElement("div");
+      row.className = "result-row pension-row";
+      row.style.animationDelay = `${index * 80}ms`;
+
+      const top = document.createElement("div");
+      top.className = "row-top";
+
+      const label = document.createElement("span");
+      label.className = "row-label";
+      label.textContent = String(index + 1).padStart(2, " ");
+
+      const groupEl = document.createElement("div");
+      groupEl.className = "pension-group";
+      groupEl.innerHTML = `<span class="num">${group}</span>조`;
+
+      const digitsEl = document.createElement("div");
+      digitsEl.className = "pension-digits";
+      digits.forEach((d, i) => digitsEl.appendChild(renderPensionDigit(d, i * 60)));
+
+      top.append(label, groupEl, digitsEl);
+
+      const full = document.createElement("div");
+      full.className = "pension-full";
+      full.textContent = `${group}조 ${digits.join("")}`;
+
+      row.append(top, full);
+      return row;
+    }
+
+    document.getElementById("pensionGenerate").addEventListener("click", () => {
+      const count = parseInt(document.getElementById("pensionCount").value, 10);
+      const container = document.getElementById("pensionResults");
+      container.innerHTML = "";
+      for (let i = 0; i < count; i++) {
+        container.appendChild(renderPensionRow(generatePensionSet(), i));
+      }
+    });
+
+    document.getElementById("pensionClear").addEventListener("click", () => {
+      document.getElementById("pensionResults").innerHTML = `
+        <div class="empty-state">
+          <div class="icon">💰</div>
+          <p>연금복권720+ 번호를 생성해 보세요!<br><span style="font-size:0.85rem">1~7조 + 6자리(0~9)</span></p>
         </div>`;
     });
 
