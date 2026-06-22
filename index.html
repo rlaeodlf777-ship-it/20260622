@@ -1,0 +1,348 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>로또 번호 생성기</title>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    :root {
+      --bg: #0f1117;
+      --surface: #1a1d27;
+      --surface-hover: #222633;
+      --border: #2e3345;
+      --text: #e8eaef;
+      --text-muted: #8b92a8;
+      --accent: #6366f1;
+      --accent-hover: #818cf8;
+      --yellow: #f5c518;
+      --blue: #3b82f6;
+      --red: #ef4444;
+      --gray: #6b7280;
+      --green: #22c55e;
+    }
+
+    body {
+      font-family: "Pretendard", "Apple SD Gothic Neo", "Malgun Gothic", sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+    }
+
+    .hero {
+      width: 100%;
+      padding: 3rem 1.5rem 2rem;
+      text-align: center;
+      background: linear-gradient(180deg, #1e1b4b 0%, var(--bg) 100%);
+    }
+
+    .hero h1 {
+      font-size: clamp(1.75rem, 5vw, 2.5rem);
+      font-weight: 800;
+      letter-spacing: -0.02em;
+      margin-bottom: 0.5rem;
+    }
+
+    .hero p {
+      color: var(--text-muted);
+      font-size: 1rem;
+    }
+
+    main {
+      width: 100%;
+      max-width: 640px;
+      padding: 0 1.5rem 3rem;
+    }
+
+    .controls {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 0.75rem;
+      align-items: center;
+      justify-content: center;
+      margin-bottom: 2rem;
+    }
+
+    .control-group {
+      display: flex;
+      align-items: center;
+      gap: 0.5rem;
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      padding: 0.5rem 1rem;
+    }
+
+    .control-group label {
+      font-size: 0.875rem;
+      color: var(--text-muted);
+      white-space: nowrap;
+    }
+
+    .control-group select {
+      background: transparent;
+      border: none;
+      color: var(--text);
+      font-size: 1rem;
+      font-weight: 600;
+      cursor: pointer;
+      outline: none;
+    }
+
+    .btn {
+      padding: 0.75rem 1.75rem;
+      border: none;
+      border-radius: 12px;
+      font-size: 1rem;
+      font-weight: 700;
+      cursor: pointer;
+      transition: transform 0.15s, background 0.15s, box-shadow 0.15s;
+    }
+
+    .btn:active { transform: scale(0.97); }
+
+    .btn-primary {
+      background: var(--accent);
+      color: #fff;
+      box-shadow: 0 4px 20px rgba(99, 102, 241, 0.35);
+    }
+
+    .btn-primary:hover { background: var(--accent-hover); }
+
+    .btn-secondary {
+      background: var(--surface);
+      color: var(--text-muted);
+      border: 1px solid var(--border);
+    }
+
+    .btn-secondary:hover {
+      background: var(--surface-hover);
+      color: var(--text);
+    }
+
+    .results {
+      display: flex;
+      flex-direction: column;
+      gap: 1rem;
+    }
+
+    .result-row {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 16px;
+      padding: 1.25rem 1.5rem;
+      display: flex;
+      align-items: center;
+      gap: 1rem;
+      opacity: 0;
+      transform: translateY(12px);
+      animation: fadeIn 0.4s ease forwards;
+    }
+
+    @keyframes fadeIn {
+      to { opacity: 1; transform: translateY(0); }
+    }
+
+    .row-label {
+      font-size: 0.8rem;
+      font-weight: 700;
+      color: var(--text-muted);
+      min-width: 2.5rem;
+      text-align: center;
+    }
+
+    .balls {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 0.5rem;
+      flex: 1;
+      justify-content: center;
+    }
+
+    .ball {
+      width: 44px;
+      height: 44px;
+      border-radius: 50%;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 1.05rem;
+      font-weight: 800;
+      color: #fff;
+      text-shadow: 0 1px 2px rgba(0,0,0,0.3);
+      box-shadow: inset 0 -3px 6px rgba(0,0,0,0.2), 0 2px 8px rgba(0,0,0,0.25);
+      animation: pop 0.35s cubic-bezier(0.34, 1.56, 0.64, 1) backwards;
+    }
+
+    @keyframes pop {
+      from { transform: scale(0); opacity: 0; }
+      to { transform: scale(1); opacity: 1; }
+    }
+
+    .ball.yellow { background: linear-gradient(145deg, #fde047, var(--yellow)); color: #422006; text-shadow: none; }
+    .ball.blue   { background: linear-gradient(145deg, #60a5fa, var(--blue)); }
+    .ball.red    { background: linear-gradient(145deg, #f87171, var(--red)); }
+    .ball.gray   { background: linear-gradient(145deg, #9ca3af, var(--gray)); }
+    .ball.green  { background: linear-gradient(145deg, #4ade80, var(--green)); color: #052e16; text-shadow: none; }
+
+    .empty-state {
+      text-align: center;
+      padding: 3rem 1rem;
+      color: var(--text-muted);
+    }
+
+    .empty-state .icon {
+      font-size: 3rem;
+      margin-bottom: 1rem;
+      opacity: 0.5;
+    }
+
+    .legend {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 0.75rem;
+      justify-content: center;
+      margin-top: 2rem;
+      padding-top: 1.5rem;
+      border-top: 1px solid var(--border);
+    }
+
+    .legend-item {
+      display: flex;
+      align-items: center;
+      gap: 0.35rem;
+      font-size: 0.75rem;
+      color: var(--text-muted);
+    }
+
+    .legend-dot {
+      width: 12px;
+      height: 12px;
+      border-radius: 50%;
+    }
+
+    footer {
+      margin-top: auto;
+      padding: 1.5rem;
+      font-size: 0.75rem;
+      color: var(--text-muted);
+      text-align: center;
+    }
+  </style>
+</head>
+<body>
+  <header class="hero">
+    <h1>🎱 로또 번호 생성기</h1>
+    <p>1~45 중 6개 번호를 무작위로 추첨합니다</p>
+  </header>
+
+  <main>
+    <div class="controls">
+      <div class="control-group">
+        <label for="count">게임 수</label>
+        <select id="count">
+          <option value="1">1게임</option>
+          <option value="3">3게임</option>
+          <option value="5" selected>5게임</option>
+          <option value="10">10게임</option>
+        </select>
+      </div>
+      <button class="btn btn-primary" id="generate">번호 생성</button>
+      <button class="btn btn-secondary" id="clear">초기화</button>
+    </div>
+
+    <div class="results" id="results">
+      <div class="empty-state" id="empty">
+        <div class="icon">🍀</div>
+        <p>버튼을 눌러 행운의 번호를 받아보세요!</p>
+      </div>
+    </div>
+
+    <div class="legend">
+      <span class="legend-item"><span class="legend-dot" style="background:var(--yellow)"></span>1~10</span>
+      <span class="legend-item"><span class="legend-dot" style="background:var(--blue)"></span>11~20</span>
+      <span class="legend-item"><span class="legend-dot" style="background:var(--red)"></span>21~30</span>
+      <span class="legend-item"><span class="legend-dot" style="background:var(--gray)"></span>31~40</span>
+      <span class="legend-item"><span class="legend-dot" style="background:var(--green)"></span>41~45</span>
+    </div>
+  </main>
+
+  <footer>※ 참고용 번호입니다. 당첨을 보장하지 않습니다.</footer>
+
+  <script>
+    const MIN = 1;
+    const MAX = 45;
+    const PICK = 6;
+
+    function ballColor(n) {
+      if (n <= 10) return "yellow";
+      if (n <= 20) return "blue";
+      if (n <= 30) return "red";
+      if (n <= 40) return "gray";
+      return "green";
+    }
+
+    function generateSet() {
+      const pool = Array.from({ length: MAX }, (_, i) => i + MIN);
+      const result = [];
+      for (let i = 0; i < PICK; i++) {
+        const idx = Math.floor(Math.random() * pool.length);
+        result.push(pool.splice(idx, 1)[0]);
+      }
+      return result.sort((a, b) => a - b);
+    }
+
+    function renderBall(num, delay) {
+      const el = document.createElement("span");
+      el.className = `ball ${ballColor(num)}`;
+      el.textContent = num;
+      el.style.animationDelay = `${delay}ms`;
+      return el;
+    }
+
+    function renderRow(numbers, index) {
+      const row = document.createElement("div");
+      row.className = "result-row";
+      row.style.animationDelay = `${index * 80}ms`;
+
+      const label = document.createElement("span");
+      label.className = "row-label";
+      label.textContent = `${String(index + 1).padStart(2, " ")}`;
+
+      const balls = document.createElement("div");
+      balls.className = "balls";
+      numbers.forEach((n, i) => balls.appendChild(renderBall(n, i * 60)));
+
+      row.appendChild(label);
+      row.appendChild(balls);
+      return row;
+    }
+
+    function generate() {
+      const count = parseInt(document.getElementById("count").value, 10);
+      const container = document.getElementById("results");
+      container.innerHTML = "";
+
+      for (let i = 0; i < count; i++) {
+        container.appendChild(renderRow(generateSet(), i));
+      }
+    }
+
+    function clear() {
+      const container = document.getElementById("results");
+      container.innerHTML = `
+        <div class="empty-state" id="empty">
+          <div class="icon">🍀</div>
+          <p>버튼을 눌러 행운의 번호를 받아보세요!</p>
+        </div>`;
+    }
+
+    document.getElementById("generate").addEventListener("click", generate);
+    document.getElementById("clear").addEventListener("click", clear);
+  </script>
+</body>
+</html>
