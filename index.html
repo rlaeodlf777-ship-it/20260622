@@ -1542,7 +1542,8 @@
       const state = { running: false, paused: true, scoreP: 0, scoreC: 0, msg: "", msgTimer: 0 };
       let blue = [];
       let red = [];
-      let ball = { x: W / 2, y: H / 2, vx: 0, vy: 0, r: BR, holder: null };
+      let ball = { x: W / 2, y: H / 2, vx: 0, vy: 0, r: BR, holder: null, kickCd: 0 };
+      let shootQueued = -1;
 
       function mk(x, y, team, human) {
         return { x, y, vx: 0, vy: 0, team, human, r: PR, tackleT: 0, tackleCd: 0 };
@@ -1568,9 +1569,10 @@
 
       function resetKickoff() {
         initTeams();
-        ball = { x: W / 2, y: H / 2, vx: 0, vy: 0, r: BR, holder: null };
+        ball = { x: W / 2, y: H / 2, vx: 0, vy: 0, r: BR, holder: null, kickCd: 0 };
         shootCharge = 0;
         shootCharging = false;
+        shootQueued = -1;
         state.msg = "킥오프!";
         state.msgTimer = 70;
       }
@@ -1594,11 +1596,13 @@
 
       function kickBall(p, vx, vy) {
         ball.holder = null;
+        ball.kickCd = 22;
         ball.vx = vx;
         ball.vy = vy;
         const len = Math.hypot(vx, vy) || 1;
-        ball.x = p.x + (vx / len) * (p.r + ball.r + 2);
-        ball.y = p.y + (vy / len) * (p.r + ball.r + 2);
+        const offset = p.r + ball.r + 16;
+        ball.x = p.x + (vx / len) * offset;
+        ball.y = p.y + (vy / len) * offset;
       }
 
       function shoot(p, powerRatio) {
@@ -1642,12 +1646,16 @@
         const zDown = keys.z || keys.Z;
         const hasBall = ball.holder === p;
 
+        if (shootQueued >= 0 && hasBall) {
+          shoot(p, shootQueued);
+          shootQueued = -1;
+        }
+
         if (hasBall && zDown) {
           shootCharging = true;
           shootCharge = Math.min(1, shootCharge + SHOOT_CHARGE_SPEED);
-        } else if (!hasBall) {
-          shootCharging = false;
-          if (!zDown) shootCharge = 0;
+        } else if (!zDown && !shootCharging) {
+          shootCharge = 0;
         }
 
         const moveSpd = (p.tackleT > 0 || shootCharging) ? 2.2 : 4.2;
@@ -1731,6 +1739,8 @@
       }
 
       function possessBall() {
+        if (ball.kickCd > 0) ball.kickCd--;
+
         if (ball.holder) {
           const h = ball.holder;
           ball.x = h.x + (h.team === "blue" ? 1 : -1) * (h.r + ball.r - 2);
@@ -1740,11 +1750,14 @@
           for (const p of allPlayers()) {
             if (p.tackleT > 0 && p.team !== h.team && dist(p, h) < p.r + h.r + 8) {
               ball.holder = p;
+              ball.kickCd = 0;
               break;
             }
           }
           return;
         }
+
+        if (ball.kickCd > 0) return;
 
         for (const p of allPlayers()) {
           if (dist(p, ball) < p.r + ball.r + 4) {
@@ -1961,26 +1974,18 @@
       function onKeyDown(e) {
         if (!document.getElementById("panel-soccer").classList.contains("active")) return;
         keys[e.key] = true;
-        if (e.key === "z" || e.key === "Z") {
-          const p = human();
-          if (p && ball.holder === p) {
-            shootCharging = true;
-            if (shootCharge < 0.05) shootCharge = 0.05;
-          }
-        }
         if (e.key === "x" || e.key === "X") xPressed = true;
         if (e.key === "c" || e.key === "C") cPressed = true;
         if (["ArrowUp", "ArrowDown", "ArrowLeft", "ArrowRight"].includes(e.key)) e.preventDefault();
       }
 
       function onKeyUp(e) {
+        if (!document.getElementById("panel-soccer").classList.contains("active")) return;
         keys[e.key] = false;
         if (e.key === "z" || e.key === "Z") {
           const p = human();
-          if (p && ball.holder === p && shootCharging) {
-            shoot(p, shootCharge);
-          } else {
-            shootCharge = 0;
+          if (p && ball.holder === p) {
+            shootQueued = Math.max(shootCharge, 0.15);
             shootCharging = false;
           }
         }
