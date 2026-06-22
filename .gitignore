@@ -1,3 +1,4 @@
+.cursor/setup-github-auth.ps1
 node_modules/
 .env
 .env.*
