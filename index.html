@@ -1081,6 +1081,7 @@
         msg: "",
         msgTimer: 0,
         serving: "player",
+        inServe: true,
       };
 
       function mkPlayer(x, facing) {
@@ -1092,10 +1093,12 @@
       let ball = { x: NET_X, y: 160, vx: 2.5, vy: -5, r: 11 };
 
       function resetBall(server) {
-        ball.x = server === "player" ? NET_X - 60 : NET_X + 60;
-        ball.y = 180;
-        ball.vx = server === "player" ? 3 : -3;
-        ball.vy = -4.5;
+        const serverChar = server === "player" ? player : cpu;
+        ball.x = serverChar.x + serverChar.w / 2;
+        ball.y = serverChar.y - ball.r - 28;
+        ball.vx = 0;
+        ball.vy = 0;
+        state.inServe = true;
       }
 
       function resetRound(server) {
@@ -1138,6 +1141,8 @@
         const dy = ball.y - cy;
         const dist = Math.hypot(dx, dy);
         if (dist > ball.r + 28) return;
+
+        state.inServe = false;
 
         const nx = dx / (dist || 1);
         const ny = dy / (dist || 1);
@@ -1214,8 +1219,25 @@
           ball.vx *= -0.75;
         }
 
+        if (state.inServe) {
+          const onPlayerSide = ball.x < NET_X;
+          const serverOnPlayerSide = state.serving === "player";
+          if (onPlayerSide !== serverOnPlayerSide) state.inServe = false;
+        }
+
         if (ball.y + ball.r >= GROUND) {
           ball.y = GROUND - ball.r;
+
+          if (state.inServe) {
+            const onPlayerSide = ball.x < NET_X;
+            const serverOnPlayerSide = state.serving === "player";
+            if (onPlayerSide === serverOnPlayerSide) {
+              resetBall(state.serving);
+              return;
+            }
+            state.inServe = false;
+          }
+
           const onPlayerSide = ball.x < NET_X;
           if (onPlayerSide) {
             state.scoreC++;
