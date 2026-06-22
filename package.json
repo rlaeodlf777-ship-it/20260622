@@ -1,0 +1,6 @@
+{
+  "name": "lotto-saju",
+  "version": "1.0.0",
+  "private": true,
+  "description": "로또 번호 생성기 & 사주 기반 AI 추천"
+}

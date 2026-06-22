@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>로또 번호 생성기</title>
+  <title>로또 번호 생성기 · 사주 추천</title>
   <style>
     *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 
@@ -16,6 +16,8 @@
       --text-muted: #8b92a8;
       --accent: #6366f1;
       --accent-hover: #818cf8;
+      --gold: #d4a853;
+      --gold-dim: #a67c2e;
       --yellow: #f5c518;
       --blue: #3b82f6;
       --red: #ef4444;
@@ -35,7 +37,7 @@
 
     .hero {
       width: 100%;
-      padding: 3rem 1.5rem 2rem;
+      padding: 2.5rem 1.5rem 1.5rem;
       text-align: center;
       background: linear-gradient(180deg, #1e1b4b 0%, var(--bg) 100%);
     }
@@ -47,16 +49,49 @@
       margin-bottom: 0.5rem;
     }
 
-    .hero p {
+    .hero p { color: var(--text-muted); font-size: 1rem; }
+
+    .tabs {
+      display: flex;
+      gap: 0.5rem;
+      justify-content: center;
+      margin-top: 1.5rem;
+    }
+
+    .tab {
+      padding: 0.6rem 1.25rem;
+      border: 1px solid var(--border);
+      border-radius: 999px;
+      background: transparent;
       color: var(--text-muted);
-      font-size: 1rem;
+      font-size: 0.9rem;
+      font-weight: 600;
+      cursor: pointer;
+      transition: all 0.2s;
+    }
+
+    .tab:hover { color: var(--text); background: var(--surface); }
+
+    .tab.active {
+      background: var(--accent);
+      border-color: var(--accent);
+      color: #fff;
+    }
+
+    .tab.saju.active {
+      background: linear-gradient(135deg, var(--gold), var(--gold-dim));
+      border-color: var(--gold);
+      color: #1a1208;
     }
 
     main {
       width: 100%;
-      max-width: 640px;
+      max-width: 680px;
       padding: 0 1.5rem 3rem;
     }
+
+    .panel { display: none; padding-top: 2rem; }
+    .panel.active { display: block; }
 
     .controls {
       display: flex;
@@ -83,7 +118,8 @@
       white-space: nowrap;
     }
 
-    .control-group select {
+    .control-group select,
+    .control-group input {
       background: transparent;
       border: none;
       color: var(--text);
@@ -91,6 +127,11 @@
       font-weight: 600;
       cursor: pointer;
       outline: none;
+    }
+
+    .control-group input[type="date"] {
+      color-scheme: dark;
+      min-width: 140px;
     }
 
     .btn {
@@ -103,7 +144,13 @@
       transition: transform 0.15s, background 0.15s, box-shadow 0.15s;
     }
 
-    .btn:active { transform: scale(0.97); }
+    .btn:disabled {
+      opacity: 0.5;
+      cursor: not-allowed;
+      transform: none;
+    }
+
+    .btn:active:not(:disabled) { transform: scale(0.97); }
 
     .btn-primary {
       background: var(--accent);
@@ -111,7 +158,13 @@
       box-shadow: 0 4px 20px rgba(99, 102, 241, 0.35);
     }
 
-    .btn-primary:hover { background: var(--accent-hover); }
+    .btn-primary:hover:not(:disabled) { background: var(--accent-hover); }
+
+    .btn-gold {
+      background: linear-gradient(135deg, var(--gold), var(--gold-dim));
+      color: #1a1208;
+      box-shadow: 0 4px 20px rgba(212, 168, 83, 0.3);
+    }
 
     .btn-secondary {
       background: var(--surface);
@@ -119,16 +172,12 @@
       border: 1px solid var(--border);
     }
 
-    .btn-secondary:hover {
+    .btn-secondary:hover:not(:disabled) {
       background: var(--surface-hover);
       color: var(--text);
     }
 
-    .results {
-      display: flex;
-      flex-direction: column;
-      gap: 1rem;
-    }
+    .results { display: flex; flex-direction: column; gap: 1rem; }
 
     .result-row {
       background: var(--surface);
@@ -138,12 +187,11 @@
       display: flex;
       align-items: center;
       gap: 1rem;
-      opacity: 0;
-      transform: translateY(12px);
       animation: fadeIn 0.4s ease forwards;
     }
 
     @keyframes fadeIn {
+      from { opacity: 0; transform: translateY(12px); }
       to { opacity: 1; transform: translateY(0); }
     }
 
@@ -195,11 +243,7 @@
       color: var(--text-muted);
     }
 
-    .empty-state .icon {
-      font-size: 3rem;
-      margin-bottom: 1rem;
-      opacity: 0.5;
-    }
+    .empty-state .icon { font-size: 3rem; margin-bottom: 1rem; opacity: 0.5; }
 
     .legend {
       display: flex;
@@ -219,10 +263,151 @@
       color: var(--text-muted);
     }
 
-    .legend-dot {
-      width: 12px;
-      height: 12px;
+    .legend-dot { width: 12px; height: 12px; border-radius: 50%; }
+
+    /* 사주 챗봇 */
+    .saju-form {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 16px;
+      padding: 1.5rem;
+      margin-bottom: 1.5rem;
+    }
+
+    .saju-form h2 {
+      font-size: 1.1rem;
+      margin-bottom: 1rem;
+      color: var(--gold);
+    }
+
+    .form-row {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 0.75rem;
+      margin-bottom: 1rem;
+    }
+
+    .chat-area {
+      display: flex;
+      flex-direction: column;
+      gap: 1rem;
+    }
+
+    .chat-bubble {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 16px;
+      padding: 1.25rem 1.5rem;
+      line-height: 1.7;
+      animation: fadeIn 0.4s ease;
+    }
+
+    .chat-bubble.user {
+      align-self: flex-end;
+      max-width: 85%;
+      background: #252a3a;
+      border-color: #3d4460;
+    }
+
+    .chat-bubble.bot {
+      border-color: rgba(212, 168, 83, 0.3);
+    }
+
+    .chat-bubble .label {
+      font-size: 0.75rem;
+      font-weight: 700;
+      color: var(--text-muted);
+      margin-bottom: 0.5rem;
+    }
+
+    .chat-bubble.bot .label { color: var(--gold); }
+
+    .saju-summary {
+      background: rgba(212, 168, 83, 0.08);
+      border-left: 3px solid var(--gold);
+      padding: 0.75rem 1rem;
+      margin: 1rem 0;
+      border-radius: 0 8px 8px 0;
+      font-size: 0.95rem;
+    }
+
+    .lucky-tag {
+      display: inline-block;
+      background: rgba(99, 102, 241, 0.15);
+      color: var(--accent-hover);
+      padding: 0.25rem 0.6rem;
+      border-radius: 6px;
+      font-size: 0.85rem;
+      margin-top: 0.5rem;
+    }
+
+    .recommend-balls {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 0.5rem;
+      justify-content: center;
+      margin: 1.25rem 0;
+    }
+
+    .number-reasons {
+      margin-top: 1rem;
+      display: flex;
+      flex-direction: column;
+      gap: 0.6rem;
+    }
+
+    .reason-item {
+      display: flex;
+      gap: 0.75rem;
+      align-items: flex-start;
+      font-size: 0.9rem;
+    }
+
+    .reason-num {
+      flex-shrink: 0;
+      width: 28px;
+      height: 28px;
       border-radius: 50%;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 0.8rem;
+      font-weight: 800;
+      background: var(--border);
+    }
+
+    .loading {
+      display: flex;
+      align-items: center;
+      gap: 0.75rem;
+      padding: 1.5rem;
+      color: var(--text-muted);
+    }
+
+    .loading-dots span {
+      display: inline-block;
+      width: 8px;
+      height: 8px;
+      border-radius: 50%;
+      background: var(--gold);
+      animation: bounce 1.2s infinite;
+    }
+
+    .loading-dots span:nth-child(2) { animation-delay: 0.2s; }
+    .loading-dots span:nth-child(3) { animation-delay: 0.4s; }
+
+    @keyframes bounce {
+      0%, 80%, 100% { transform: translateY(0); opacity: 0.4; }
+      40% { transform: translateY(-6px); opacity: 1; }
+    }
+
+    .error-msg {
+      color: #f87171;
+      font-size: 0.9rem;
+      padding: 1rem;
+      background: rgba(239, 68, 68, 0.1);
+      border-radius: 12px;
+      border: 1px solid rgba(239, 68, 68, 0.3);
     }
 
     footer {
@@ -237,46 +422,79 @@
 <body>
   <header class="hero">
     <h1>🎱 로또 번호 생성기</h1>
-    <p>1~45 중 6개 번호를 무작위로 추첨합니다</p>
+    <p>랜덤 추첨 · 사주 AI 추천</p>
+    <nav class="tabs">
+      <button class="tab active" data-tab="random">🍀 랜덤 생성</button>
+      <button class="tab saju" data-tab="saju">🔮 사주 추천</button>
+    </nav>
   </header>
 
   <main>
-    <div class="controls">
-      <div class="control-group">
-        <label for="count">게임 수</label>
-        <select id="count">
-          <option value="1">1게임</option>
-          <option value="3">3게임</option>
-          <option value="5" selected>5게임</option>
-          <option value="10">10게임</option>
-        </select>
+    <!-- 랜덤 생성 -->
+    <section class="panel active" id="panel-random">
+      <div class="controls">
+        <div class="control-group">
+          <label for="count">게임 수</label>
+          <select id="count">
+            <option value="1">1게임</option>
+            <option value="3">3게임</option>
+            <option value="5" selected>5게임</option>
+            <option value="10">10게임</option>
+          </select>
+        </div>
+        <button class="btn btn-primary" id="generate">번호 생성</button>
+        <button class="btn btn-secondary" id="clear">초기화</button>
       </div>
-      <button class="btn btn-primary" id="generate">번호 생성</button>
-      <button class="btn btn-secondary" id="clear">초기화</button>
-    </div>
 
-    <div class="results" id="results">
-      <div class="empty-state" id="empty">
-        <div class="icon">🍀</div>
-        <p>버튼을 눌러 행운의 번호를 받아보세요!</p>
+      <div class="results" id="results">
+        <div class="empty-state">
+          <div class="icon">🍀</div>
+          <p>버튼을 눌러 행운의 번호를 받아보세요!</p>
+        </div>
       </div>
-    </div>
 
-    <div class="legend">
-      <span class="legend-item"><span class="legend-dot" style="background:var(--yellow)"></span>1~10</span>
-      <span class="legend-item"><span class="legend-dot" style="background:var(--blue)"></span>11~20</span>
-      <span class="legend-item"><span class="legend-dot" style="background:var(--red)"></span>21~30</span>
-      <span class="legend-item"><span class="legend-dot" style="background:var(--gray)"></span>31~40</span>
-      <span class="legend-item"><span class="legend-dot" style="background:var(--green)"></span>41~45</span>
-    </div>
+      <div class="legend">
+        <span class="legend-item"><span class="legend-dot" style="background:var(--yellow)"></span>1~10</span>
+        <span class="legend-item"><span class="legend-dot" style="background:var(--blue)"></span>11~20</span>
+        <span class="legend-item"><span class="legend-dot" style="background:var(--red)"></span>21~30</span>
+        <span class="legend-item"><span class="legend-dot" style="background:var(--gray)"></span>31~40</span>
+        <span class="legend-item"><span class="legend-dot" style="background:var(--green)"></span>41~45</span>
+      </div>
+    </section>
+
+    <!-- 사주 추천 -->
+    <section class="panel" id="panel-saju">
+      <div class="saju-form">
+        <h2>사주 정보 입력</h2>
+        <div class="form-row">
+          <div class="control-group">
+            <label for="gender">성별</label>
+            <select id="gender">
+              <option value="male">남성</option>
+              <option value="female">여성</option>
+            </select>
+          </div>
+          <div class="control-group">
+            <label for="birthDate">생년월일</label>
+            <input type="date" id="birthDate" max="2026-06-22">
+          </div>
+        </div>
+        <button class="btn btn-gold" id="sajuRecommend">🔮 사주로 번호 추천받기</button>
+      </div>
+
+      <div class="chat-area" id="chatArea">
+        <div class="empty-state">
+          <div class="icon">🔮</div>
+          <p>성별과 생년월일을 입력하면<br>사주에 맞는 로또 번호와 설명을 받을 수 있습니다.</p>
+        </div>
+      </div>
+    </section>
   </main>
 
   <footer>※ 참고용 번호입니다. 당첨을 보장하지 않습니다.</footer>
 
   <script>
-    const MIN = 1;
-    const MAX = 45;
-    const PICK = 6;
+    const MIN = 1, MAX = 45, PICK = 6;
 
     function ballColor(n) {
       if (n <= 10) return "yellow";
@@ -286,6 +504,25 @@
       return "green";
     }
 
+    function renderBall(num, delay = 0) {
+      const el = document.createElement("span");
+      el.className = `ball ${ballColor(num)}`;
+      el.textContent = num;
+      el.style.animationDelay = `${delay}ms`;
+      return el;
+    }
+
+    /* 탭 전환 */
+    document.querySelectorAll(".tab").forEach((tab) => {
+      tab.addEventListener("click", () => {
+        document.querySelectorAll(".tab").forEach((t) => t.classList.remove("active"));
+        document.querySelectorAll(".panel").forEach((p) => p.classList.remove("active"));
+        tab.classList.add("active");
+        document.getElementById(`panel-${tab.dataset.tab}`).classList.add("active");
+      });
+    });
+
+    /* 랜덤 생성 */
     function generateSet() {
       const pool = Array.from({ length: MAX }, (_, i) => i + MIN);
       const result = [];
@@ -296,14 +533,6 @@
       return result.sort((a, b) => a - b);
     }
 
-    function renderBall(num, delay) {
-      const el = document.createElement("span");
-      el.className = `ball ${ballColor(num)}`;
-      el.textContent = num;
-      el.style.animationDelay = `${delay}ms`;
-      return el;
-    }
-
     function renderRow(numbers, index) {
       const row = document.createElement("div");
       row.className = "result-row";
@@ -311,38 +540,137 @@
 
       const label = document.createElement("span");
       label.className = "row-label";
-      label.textContent = `${String(index + 1).padStart(2, " ")}`;
+      label.textContent = String(index + 1).padStart(2, " ");
 
       const balls = document.createElement("div");
       balls.className = "balls";
       numbers.forEach((n, i) => balls.appendChild(renderBall(n, i * 60)));
 
-      row.appendChild(label);
-      row.appendChild(balls);
+      row.append(label, balls);
       return row;
     }
 
-    function generate() {
+    document.getElementById("generate").addEventListener("click", () => {
       const count = parseInt(document.getElementById("count").value, 10);
       const container = document.getElementById("results");
       container.innerHTML = "";
-
       for (let i = 0; i < count; i++) {
         container.appendChild(renderRow(generateSet(), i));
       }
-    }
+    });
 
-    function clear() {
-      const container = document.getElementById("results");
-      container.innerHTML = `
-        <div class="empty-state" id="empty">
+    document.getElementById("clear").addEventListener("click", () => {
+      document.getElementById("results").innerHTML = `
+        <div class="empty-state">
           <div class="icon">🍀</div>
           <p>버튼을 눌러 행운의 번호를 받아보세요!</p>
         </div>`;
+    });
+
+    /* 사주 추천 */
+    const chatArea = document.getElementById("chatArea");
+    const sajuBtn = document.getElementById("sajuRecommend");
+
+    function appendUserBubble(gender, birthDate) {
+      const genderLabel = gender === "male" ? "남성" : "여성";
+      const bubble = document.createElement("div");
+      bubble.className = "chat-bubble user";
+      bubble.innerHTML = `
+        <div class="label">나</div>
+        <p>성별: ${genderLabel}<br>생년월일: ${birthDate} (양력)<br>사주에 맞는 로또 번호를 추천해 주세요.</p>`;
+      chatArea.appendChild(bubble);
     }
 
-    document.getElementById("generate").addEventListener("click", generate);
-    document.getElementById("clear").addEventListener("click", clear);
+    function showLoading() {
+      const el = document.createElement("div");
+      el.className = "loading";
+      el.id = "loadingBubble";
+      el.innerHTML = `
+        <div class="loading-dots"><span></span><span></span><span></span></div>
+        <span>사주를 분석하고 있습니다...</span>`;
+      chatArea.appendChild(el);
+    }
+
+    function removeLoading() {
+      document.getElementById("loadingBubble")?.remove();
+    }
+
+    function appendBotBubble(data) {
+      const bubble = document.createElement("div");
+      bubble.className = "chat-bubble bot";
+
+      const ballsEl = document.createElement("div");
+      ballsEl.className = "recommend-balls";
+      data.numbers.forEach((n, i) => ballsEl.appendChild(renderBall(n, i * 80)));
+
+      const reasonsHtml = data.numberReasons
+        .map((r) => `
+          <div class="reason-item">
+            <span class="reason-num">${r.number}</span>
+            <span>${r.reason}</span>
+          </div>`)
+        .join("");
+
+      bubble.innerHTML = `
+        <div class="label">🔮 사주 AI</div>
+        <div class="saju-summary">${data.sajuSummary}</div>
+        <div class="lucky-tag">✨ ${data.luckyElements}</div>
+        <p style="margin-top:1rem">${data.explanation}</p>`;
+      bubble.appendChild(ballsEl);
+
+      const reasonsWrap = document.createElement("div");
+      reasonsWrap.className = "number-reasons";
+      reasonsWrap.innerHTML = `<strong style="font-size:0.85rem;color:var(--text-muted)">번호별 사주 근거</strong>${reasonsHtml}`;
+      bubble.appendChild(reasonsWrap);
+
+      chatArea.appendChild(bubble);
+      bubble.scrollIntoView({ behavior: "smooth", block: "end" });
+    }
+
+    function appendError(msg) {
+      const el = document.createElement("div");
+      el.className = "error-msg";
+      el.textContent = msg;
+      chatArea.appendChild(el);
+    }
+
+    sajuBtn.addEventListener("click", async () => {
+      const gender = document.getElementById("gender").value;
+      const birthDate = document.getElementById("birthDate").value;
+
+      if (!birthDate) {
+        alert("생년월일을 입력해 주세요.");
+        return;
+      }
+
+      chatArea.querySelector(".empty-state")?.remove();
+      appendUserBubble(gender, birthDate);
+      showLoading();
+      sajuBtn.disabled = true;
+
+      try {
+        const res = await fetch("/api/recommend", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ gender, birthDate }),
+        });
+
+        const data = await res.json();
+        removeLoading();
+
+        if (!res.ok) {
+          appendError(data.error || "추천에 실패했습니다.");
+          return;
+        }
+
+        appendBotBubble(data);
+      } catch {
+        removeLoading();
+        appendError("서버에 연결할 수 없습니다. Vercel에 배포 후 이용해 주세요.");
+      } finally {
+        sajuBtn.disabled = false;
+      }
+    });
   </script>
 </body>
 </html>
