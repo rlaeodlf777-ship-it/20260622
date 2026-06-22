@@ -886,6 +886,21 @@
           <canvas id="soccerCanvas" width="640" height="400"></canvas>
         </div>
         <div class="game-controls">
+          <div class="control-group">
+            <label for="soccerPlayers">팀당 인원</label>
+            <select id="soccerPlayers">
+              <option value="1">1명</option>
+              <option value="2" selected>2명</option>
+              <option value="3">3명</option>
+              <option value="4">4명</option>
+              <option value="5">5명</option>
+              <option value="6">6명</option>
+              <option value="7">7명</option>
+              <option value="8">8명</option>
+              <option value="9">9명</option>
+              <option value="10">10명</option>
+            </select>
+          </div>
           <button class="btn btn-soccer" id="soccerStart">▶ 시작</button>
           <button class="btn btn-secondary" id="soccerReset">다시하기</button>
         </div>
@@ -1525,7 +1540,6 @@
       const GOAL_H = 110;
       const GOAL_Y = (H - GOAL_H) / 2;
       const FIELD_PAD = 8;
-      const PR = 16;
       const BR = 8;
       const MAX_GOALS = 5;
       const FRICTION = 0.94;
@@ -1546,13 +1560,42 @@
       let ball = { x: W / 2, y: H / 2, vx: 0, vy: 0, r: BR, holder: null, kickCd: 0 };
       let shootQueued = -1;
 
-      function mk(x, y, team, human) {
-        return { x, y, vx: 0, vy: 0, team, human, r: PR, tackleT: 0, tackleCd: 0 };
+      function getPlayerCount() {
+        return clamp(parseInt(document.getElementById("soccerPlayers").value, 10) || 2, 1, 10);
+      }
+
+      function playerRadius(count) {
+        if (count <= 2) return 16;
+        if (count <= 4) return 14;
+        if (count <= 6) return 12;
+        if (count <= 8) return 11;
+        return 9;
+      }
+
+      function mk(x, y, team, human, r) {
+        return { x, y, vx: 0, vy: 0, team, human, r, tackleT: 0, tackleCd: 0 };
+      }
+
+      function buildTeam(team, count, isBlue) {
+        const r = playerRadius(count);
+        const players = [];
+        const baseX = isBlue ? W * 0.2 : W * 0.8;
+        const padY = 24 + r;
+        const usableH = H - padY * 2;
+
+        for (let i = 0; i < count; i++) {
+          const y = padY + (usableH * (i + 0.5)) / count;
+          const row = Math.floor(i / 2);
+          const xOffset = row * 22 * (isBlue ? 1 : -1);
+          players.push(mk(baseX + xOffset, y, team, isBlue && i === 0, r));
+        }
+        return players;
       }
 
       function initTeams() {
-        blue = [mk(W * 0.22, H * 0.32, "blue", true), mk(W * 0.22, H * 0.68, "blue", false)];
-        red = [mk(W * 0.78, H * 0.32, "red", false), mk(W * 0.78, H * 0.68, "red", false)];
+        const n = getPlayerCount();
+        blue = buildTeam("blue", n, true);
+        red = buildTeam("red", n, false);
       }
 
       function allPlayers() { return [...blue, ...red]; }
@@ -1565,7 +1608,13 @@
 
       function teammate(p) {
         const mates = (p.team === "blue" ? blue : red).filter((m) => m !== p);
-        return mates[0];
+        if (mates.length === 0) return null;
+        return mates.reduce((best, m) => (dist(p, m) < dist(p, best) ? m : best));
+      }
+
+      function matchLabel() {
+        const n = getPlayerCount();
+        return `${n}vs${n}`;
       }
 
       function resetKickoff() {
@@ -1591,8 +1640,8 @@
         const st = document.getElementById("soccerStatus");
         if (state.scoreP >= MAX_GOALS) st.textContent = "🎉 승리!";
         else if (state.scoreC >= MAX_GOALS) st.textContent = "😢 패배...";
-        else if (state.paused && !state.running) st.textContent = "5골 선승 · 2vs2";
-        else st.textContent = `${MAX_GOALS}골 선승`;
+        else if (state.paused && !state.running) st.textContent = `5골 선승 · ${matchLabel()}`;
+        else st.textContent = `${MAX_GOALS}골 선승 · ${matchLabel()}`;
       }
 
       function inGoalMouthY(y) {
@@ -1627,6 +1676,10 @@
       function passBall(p) {
         if (ball.holder !== p) return;
         const mate = teammate(p);
+        if (!mate) {
+          shoot(p, 0.55);
+          return;
+        }
         const dx = mate.x - p.x;
         const dy = mate.y - p.y;
         const len = Math.hypot(dx, dy) || 1;
@@ -1695,7 +1748,7 @@
           const mate = teammate(p);
           const toGoal = Math.abs(p.x - goalX);
           if (toGoal < 130 && Math.random() < 0.04) shoot(p, 0.55 + Math.random() * 0.4);
-          else if (dist(p, mate) > 80 && Math.random() < 0.025) passBall(p);
+          else if (mate && dist(p, mate) > 80 && Math.random() < 0.025) passBall(p);
           else {
             p.vx = clamp((goalX - p.x) * 0.04, -3.5, 3.5);
             p.vy = clamp((H / 2 - p.y) * 0.04, -3.5, 3.5);
@@ -1736,13 +1789,35 @@
         allPlayers().forEach((p) => {
           p.x += p.vx;
           p.y += p.vy;
-          p.x = clamp(p.x, PR + 4, W - PR - 4);
-          p.y = clamp(p.y, PR + 4, H - PR - 4);
+          p.x = clamp(p.x, p.r + 4, W - p.r - 4);
+          p.y = clamp(p.y, p.r + 4, H - p.r - 4);
           if (p.tackleT > 0) p.tackleT--;
           if (p.tackleCd > 0) p.tackleCd--;
           p.vx *= 0.85;
           p.vy *= 0.85;
         });
+        separatePlayers();
+      }
+
+      function separatePlayers() {
+        const players = allPlayers();
+        for (let i = 0; i < players.length; i++) {
+          for (let j = i + 1; j < players.length; j++) {
+            const a = players[i];
+            const b = players[j];
+            const d = dist(a, b);
+            const minD = a.r + b.r + 2;
+            if (d < minD && d > 0.01) {
+              const push = (minD - d) / 2;
+              const nx = (a.x - b.x) / d;
+              const ny = (a.y - b.y) / d;
+              a.x = clamp(a.x + nx * push, a.r + 4, W - a.r - 4);
+              a.y = clamp(a.y + ny * push, a.r + 4, H - a.r - 4);
+              b.x = clamp(b.x - nx * push, b.r + 4, W - b.r - 4);
+              b.y = clamp(b.y - ny * push, b.r + 4, H - b.r - 4);
+            }
+          }
+        }
       }
 
       function possessBall() {
@@ -1913,7 +1988,7 @@
         }
 
         ctx.fillStyle = "#fff";
-        ctx.font = "bold 10px sans-serif";
+        ctx.font = p.r >= 12 ? "bold 10px sans-serif" : "bold 8px sans-serif";
         ctx.textAlign = "center";
         ctx.textBaseline = "middle";
         ctx.fillText(p.human ? "YOU" : p.team === "blue" ? "P" : "C", p.x, p.y);
@@ -2038,6 +2113,13 @@
 
       window.addEventListener("keydown", onKeyDown);
       window.addEventListener("keyup", onKeyUp);
+
+      document.getElementById("soccerPlayers").addEventListener("change", () => {
+        resetMatch();
+        state.running = false;
+        state.paused = true;
+        updateHud();
+      });
 
       document.getElementById("soccerStart").addEventListener("click", () => {
         if (state.scoreP >= MAX_GOALS || state.scoreC >= MAX_GOALS) resetMatch();
