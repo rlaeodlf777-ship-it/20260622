@@ -74,6 +74,8 @@
       --pension: #10b981;
       --pension-hover: #34d399;
       --pension-dim: #059669;
+      --volley: #eab308;
+      --volley-dim: #ca8a04;
     }
 
     body {
@@ -172,6 +174,12 @@
       background: linear-gradient(135deg, var(--pension), var(--pension-dim));
       border-color: var(--pension);
       color: #fff;
+    }
+
+    .tab.volley.active {
+      background: linear-gradient(135deg, #fde047, var(--volley-dim));
+      border-color: var(--volley);
+      color: #422006;
     }
 
     main {
@@ -580,6 +588,80 @@
       color: var(--text-muted);
       text-align: center;
     }
+
+    /* 피카츄 배구 */
+    .volley-wrap {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 1rem;
+    }
+
+    .volley-hud {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      width: 100%;
+      max-width: 640px;
+      padding: 0.75rem 1rem;
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      font-weight: 800;
+      font-size: 1.1rem;
+    }
+
+    .volley-score span { color: var(--text-muted); font-size: 0.85rem; font-weight: 600; }
+
+    .volley-canvas-box {
+      position: relative;
+      width: 100%;
+      max-width: 640px;
+      border-radius: 12px;
+      overflow: hidden;
+      border: 2px solid var(--border);
+      box-shadow: 0 8px 32px rgba(0, 0, 0, 0.15);
+    }
+
+    #volleyCanvas {
+      display: block;
+      width: 100%;
+      height: auto;
+      background: #87ceeb;
+      touch-action: none;
+    }
+
+    .volley-controls {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 0.75rem;
+      justify-content: center;
+    }
+
+    .volley-help {
+      width: 100%;
+      max-width: 640px;
+      text-align: center;
+      font-size: 0.85rem;
+      color: var(--text-muted);
+      line-height: 1.6;
+    }
+
+    .volley-help kbd {
+      display: inline-block;
+      padding: 0.15rem 0.45rem;
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 4px;
+      font-size: 0.8rem;
+      font-family: inherit;
+    }
+
+    .btn-volley {
+      background: linear-gradient(135deg, #fde047, var(--volley-dim));
+      color: #422006;
+      box-shadow: 0 4px 20px rgba(234, 179, 8, 0.35);
+    }
   </style>
 </head>
 <body>
@@ -591,11 +673,12 @@
 
   <header class="hero">
     <h1>🎱 복권 번호 생성기</h1>
-    <p>로또 · 연금복권 · 사주 AI 추천</p>
+    <p>로또 · 연금복권 · 사주 AI · 피카츄 배구</p>
     <nav class="tabs">
       <button class="tab active" data-tab="random">🍀 로또</button>
       <button class="tab pension" data-tab="pension">💰 연금복권</button>
       <button class="tab saju" data-tab="saju">🔮 사주 추천</button>
+      <button class="tab volley" data-tab="volley">⚡ 피카츄 배구</button>
     </nav>
   </header>
 
@@ -687,6 +770,27 @@
         </div>
       </div>
     </section>
+
+    <!-- 피카츄 배구 -->
+    <section class="panel" id="panel-volley">
+      <div class="volley-wrap">
+        <div class="volley-hud">
+          <div class="volley-score">나 <strong id="volleyScoreP">0</strong></div>
+          <div id="volleyStatus">15점 선승!</div>
+          <div class="volley-score"><strong id="volleyScoreC">0</strong> CPU</div>
+        </div>
+        <div class="volley-canvas-box">
+          <canvas id="volleyCanvas" width="640" height="360"></canvas>
+        </div>
+        <div class="volley-controls">
+          <button class="btn btn-volley" id="volleyStart">▶ 시작</button>
+          <button class="btn btn-secondary" id="volleyReset">다시하기</button>
+        </div>
+        <p class="volley-help">
+          <kbd>←</kbd><kbd>→</kbd> 이동 · <kbd>↑</kbd> 또는 <kbd>Space</kbd> 점프 · 공을 넘겨 상대 코트에 떨어뜨리세요!
+        </p>
+      </div>
+    </section>
   </main>
 
   <footer>※ 참고용 번호입니다. 당첨을 보장하지 않습니다.</footer>
@@ -728,12 +832,19 @@
     }
 
     /* 탭 전환 */
+    let volleyGame = null;
+
     document.querySelectorAll(".tab").forEach((tab) => {
       tab.addEventListener("click", () => {
         document.querySelectorAll(".tab").forEach((t) => t.classList.remove("active"));
         document.querySelectorAll(".panel").forEach((p) => p.classList.remove("active"));
         tab.classList.add("active");
         document.getElementById(`panel-${tab.dataset.tab}`).classList.add("active");
+        if (tab.dataset.tab === "volley") {
+          volleyGame?.resume();
+        } else {
+          volleyGame?.pause();
+        }
       });
     });
 
@@ -948,6 +1059,334 @@
         sajuBtn.disabled = false;
       }
     });
+
+    /* 피카츄 배구 */
+    (function initVolleyGame() {
+      const canvas = document.getElementById("volleyCanvas");
+      const ctx = canvas.getContext("2d");
+      const W = canvas.width;
+      const H = canvas.height;
+      const GROUND = 300;
+      const NET_X = W / 2;
+      const NET_H = 72;
+      const MAX_SCORE = 15;
+      const GRAVITY = 0.42;
+      const keys = {};
+
+      const state = {
+        running: false,
+        paused: true,
+        scoreP: 0,
+        scoreC: 0,
+        msg: "",
+        msgTimer: 0,
+        serving: "player",
+      };
+
+      function mkPlayer(x, facing) {
+        return { x, y: GROUND - 48, vx: 0, vy: 0, w: 44, h: 48, facing, onGround: true };
+      }
+
+      let player = mkPlayer(100, 1);
+      let cpu = mkPlayer(W - 144, -1);
+      let ball = { x: NET_X, y: 160, vx: 2.5, vy: -5, r: 11 };
+
+      function resetBall(server) {
+        ball.x = server === "player" ? NET_X - 60 : NET_X + 60;
+        ball.y = 180;
+        ball.vx = server === "player" ? 3 : -3;
+        ball.vy = -4.5;
+      }
+
+      function resetRound(server) {
+        player = mkPlayer(100, 1);
+        cpu = mkPlayer(W - 144, -1);
+        state.serving = server;
+        resetBall(server);
+        state.msg = server === "player" ? "서브!" : "CPU 서브";
+        state.msgTimer = 90;
+      }
+
+      function resetMatch() {
+        state.scoreP = 0;
+        state.scoreC = 0;
+        updateHud();
+        resetRound("player");
+      }
+
+      function updateHud() {
+        document.getElementById("volleyScoreP").textContent = state.scoreP;
+        document.getElementById("volleyScoreC").textContent = state.scoreC;
+        const st = document.getElementById("volleyStatus");
+        if (state.scoreP >= MAX_SCORE || state.scoreC >= MAX_SCORE) {
+          st.textContent = state.scoreP >= MAX_SCORE ? "🎉 승리!" : "😢 패배...";
+        } else if (state.paused && !state.running) {
+          st.textContent = "시작 버튼을 누르세요";
+        } else {
+          st.textContent = `${MAX_SCORE}점 선승`;
+        }
+      }
+
+      function clamp(v, lo, hi) {
+        return Math.max(lo, Math.min(hi, v));
+      }
+
+      function hitBall(p, power) {
+        const cx = p.x + p.w / 2;
+        const cy = p.y + 8;
+        const dx = ball.x - cx;
+        const dy = ball.y - cy;
+        const dist = Math.hypot(dx, dy);
+        if (dist > ball.r + 28) return;
+
+        const nx = dx / (dist || 1);
+        const ny = dy / (dist || 1);
+        const spd = power || 7;
+        ball.vx = nx * spd + p.facing * 1.5;
+        ball.vy = ny * spd - 2;
+        if (ball.vy > -2) ball.vy = -4;
+      }
+
+      function updatePlayer(p, isCpu) {
+        const speed = isCpu ? 3.2 : 4.5;
+        const jump = -9.5;
+
+        if (isCpu) {
+          const target = ball.x - p.w / 2;
+          if (ball.x > NET_X + 10) {
+            if (p.x < target - 8) p.vx = speed;
+            else if (p.x > target + 8) p.vx = -speed;
+            else p.vx = 0;
+          } else {
+            p.vx *= 0.8;
+          }
+          if (p.onGround && ball.x > NET_X && Math.abs(ball.x - (p.x + p.w / 2)) < 50 && ball.y < p.y + 20) {
+            p.vy = jump;
+            p.onGround = false;
+          }
+        } else {
+          p.vx = 0;
+          if (keys.ArrowLeft || keys.a) p.vx = -speed;
+          if (keys.ArrowRight || keys.d) p.vx = speed;
+          if ((keys.ArrowUp || keys.w || keys[" "]) && p.onGround) {
+            p.vy = jump;
+            p.onGround = false;
+          }
+        }
+
+        p.vy += GRAVITY;
+        p.x += p.vx;
+        p.y += p.vy;
+
+        const minX = isCpu ? NET_X + 8 : 16;
+        const maxX = isCpu ? W - p.w - 16 : NET_X - p.w - 8;
+        p.x = clamp(p.x, minX, maxX);
+
+        if (p.y >= GROUND - p.h) {
+          p.y = GROUND - p.h;
+          p.vy = 0;
+          p.onGround = true;
+        } else {
+          p.onGround = false;
+        }
+
+        hitBall(p, isCpu ? 6.5 : 8);
+      }
+
+      function updateBall() {
+        ball.vy += GRAVITY * 0.85;
+        ball.x += ball.vx;
+        ball.y += ball.vy;
+
+        if (ball.x - ball.r < 8) {
+          ball.x = 8 + ball.r;
+          ball.vx = Math.abs(ball.vx) * 0.85;
+        }
+        if (ball.x + ball.r > W - 8) {
+          ball.x = W - 8 - ball.r;
+          ball.vx = -Math.abs(ball.vx) * 0.85;
+        }
+
+        const netTop = GROUND - NET_H;
+        if (Math.abs(ball.x - NET_X) < ball.r + 3 && ball.y + ball.r > netTop) {
+          if (ball.x < NET_X) ball.x = NET_X - ball.r - 3;
+          else ball.x = NET_X + ball.r + 3;
+          ball.vx *= -0.75;
+        }
+
+        if (ball.y + ball.r >= GROUND) {
+          ball.y = GROUND - ball.r;
+          const onPlayerSide = ball.x < NET_X;
+          if (onPlayerSide) {
+            state.scoreC++;
+            state.msg = "CPU 득점!";
+            state.serving = "cpu";
+          } else {
+            state.scoreP++;
+            state.msg = "득점!";
+            state.serving = "player";
+          }
+          updateHud();
+          if (state.scoreP >= MAX_SCORE || state.scoreC >= MAX_SCORE) {
+            state.running = false;
+            state.paused = true;
+          } else {
+            resetRound(state.serving);
+          }
+          return;
+        }
+
+        if (ball.y - ball.r < 40) {
+          ball.y = 40 + ball.r;
+          ball.vy = Math.abs(ball.vy) * 0.6;
+        }
+      }
+
+      function drawPikachu(p, isPlayer) {
+        const cx = p.x + p.w / 2;
+        const cy = p.y + p.h / 2;
+
+        ctx.fillStyle = "#F8D030";
+        ctx.beginPath();
+        ctx.ellipse(cx, cy + 4, p.w / 2 - 2, p.h / 2.3, 0, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.strokeStyle = "#C8A020";
+        ctx.lineWidth = 2;
+        ctx.stroke();
+
+        const earDir = p.facing;
+        ctx.fillStyle = "#F8D030";
+        ctx.beginPath();
+        ctx.moveTo(cx - earDir * 8, p.y + 10);
+        ctx.lineTo(cx - earDir * 22, p.y - 18);
+        ctx.lineTo(cx - earDir * 2, p.y + 14);
+        ctx.fill();
+        ctx.beginPath();
+        ctx.moveTo(cx + earDir * 8, p.y + 10);
+        ctx.lineTo(cx + earDir * 22, p.y - 18);
+        ctx.lineTo(cx + earDir * 2, p.y + 14);
+        ctx.fill();
+
+        ctx.fillStyle = "#222";
+        ctx.beginPath();
+        ctx.arc(cx - 8, cy - 2, 3, 0, Math.PI * 2);
+        ctx.arc(cx + 8, cy - 2, 3, 0, Math.PI * 2);
+        ctx.fill();
+
+        ctx.fillStyle = "#E84848";
+        ctx.beginPath();
+        ctx.arc(cx - 14, cy + 6, 5, 0, Math.PI * 2);
+        ctx.arc(cx + 14, cy + 6, 5, 0, Math.PI * 2);
+        ctx.fill();
+
+        ctx.strokeStyle = "#C8A020";
+        ctx.lineWidth = 2;
+        ctx.beginPath();
+        ctx.arc(cx, cy + 10, 4, 0.1, Math.PI - 0.1);
+        ctx.stroke();
+
+        if (isPlayer) {
+          ctx.fillStyle = "rgba(255,255,255,0.7)";
+          ctx.font = "bold 10px sans-serif";
+          ctx.textAlign = "center";
+          ctx.fillText("YOU", cx, p.y - 6);
+        }
+      }
+
+      function draw() {
+        const sky = ctx.createLinearGradient(0, 0, 0, GROUND);
+        sky.addColorStop(0, "#5eb3e8");
+        sky.addColorStop(1, "#87ceeb");
+        ctx.fillStyle = sky;
+        ctx.fillRect(0, 0, W, GROUND);
+
+        ctx.fillStyle = "#f4d03f";
+        ctx.beginPath();
+        ctx.arc(W - 60, 50, 28, 0, Math.PI * 2);
+        ctx.fill();
+
+        ctx.fillStyle = "#e8c872";
+        ctx.fillRect(0, GROUND, W, H - GROUND);
+        ctx.strokeStyle = "#fff";
+        ctx.lineWidth = 3;
+        ctx.beginPath();
+        ctx.moveTo(0, GROUND);
+        ctx.lineTo(W, GROUND);
+        ctx.stroke();
+
+        ctx.fillStyle = "#fff";
+        ctx.fillRect(NET_X - 3, GROUND - NET_H, 6, NET_H);
+        ctx.fillStyle = "rgba(255,255,255,0.5)";
+        for (let i = 0; i < 5; i++) {
+          ctx.fillRect(NET_X - 20, GROUND - NET_H + i * 16, 40, 2);
+        }
+
+        drawPikachu(player, true);
+        drawPikachu(cpu, false);
+
+        ctx.fillStyle = "#fff";
+        ctx.beginPath();
+        ctx.arc(ball.x, ball.y, ball.r, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.strokeStyle = "#ccc";
+        ctx.lineWidth = 1.5;
+        ctx.stroke();
+        ctx.strokeStyle = "#ddd";
+        ctx.beginPath();
+        ctx.arc(ball.x, ball.y, ball.r, 0, Math.PI * 2);
+        ctx.stroke();
+
+        if (state.msgTimer > 0) {
+          ctx.fillStyle = "rgba(0,0,0,0.55)";
+          ctx.fillRect(W / 2 - 80, H / 2 - 30, 160, 50);
+          ctx.fillStyle = "#fff";
+          ctx.font = "bold 22px sans-serif";
+          ctx.textAlign = "center";
+          ctx.fillText(state.msg, W / 2, H / 2 + 2);
+          state.msgTimer--;
+        }
+      }
+
+      function loop() {
+        if (state.running && !state.paused) {
+          updatePlayer(player, false);
+          updatePlayer(cpu, true);
+          updateBall();
+        }
+        draw();
+        requestAnimationFrame(loop);
+      }
+
+      window.addEventListener("keydown", (e) => {
+        keys[e.key] = true;
+        if (["ArrowUp", "ArrowDown", "ArrowLeft", "ArrowRight", " "].includes(e.key)) {
+          e.preventDefault();
+        }
+      });
+      window.addEventListener("keyup", (e) => { keys[e.key] = false; });
+
+      document.getElementById("volleyStart").addEventListener("click", () => {
+        if (state.scoreP >= MAX_SCORE || state.scoreC >= MAX_SCORE) resetMatch();
+        state.running = true;
+        state.paused = false;
+        updateHud();
+      });
+
+      document.getElementById("volleyReset").addEventListener("click", () => {
+        resetMatch();
+        state.running = true;
+        state.paused = false;
+        updateHud();
+      });
+
+      resetMatch();
+      loop();
+
+      volleyGame = {
+        resume() { if (state.running) state.paused = false; },
+        pause() { state.paused = true; },
+      };
+    })();
   </script>
 </body>
 </html>
