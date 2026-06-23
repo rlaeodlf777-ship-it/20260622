@@ -1,4 +1,5 @@
 const { createClient } = require("@supabase/supabase-js");
+const { getMissingSupabaseEnv } = require("./_env");
 
 const MIN = 1;
 const MAX = 45;
@@ -43,8 +44,9 @@ module.exports = async function handler(req, res) {
 
   const supabase = getSupabase();
   if (!supabase) {
+    const missing = getMissingSupabaseEnv();
     return res.status(500).json({
-      error: "SUPABASE_URL 또는 SUPABASE_SERVICE_ROLE_KEY가 설정되지 않았습니다.",
+      error: `환경 변수가 설정되지 않았습니다: ${missing.join(", ")}. 프로젝트 루트에 .env 파일을 만들고 vercel dev를 재시작하세요.`,
     });
   }
 

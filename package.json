@@ -3,6 +3,9 @@
   "version": "1.0.0",
   "private": true,
   "description": "로또 번호 생성기 & 사주 기반 AI 추천",
+  "scripts": {
+    "check:supabase": "node scripts/check-supabase.js"
+  },
   "dependencies": {
     "@supabase/supabase-js": "^2.49.1"
   }
