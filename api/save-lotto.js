@@ -44,8 +44,12 @@ module.exports = async function handler(req, res) {
   const supabase = getSupabase();
   if (!supabase) {
     const missing = getMissingSupabaseEnv();
+    const onVercel = Boolean(process.env.VERCEL);
+    const hint = onVercel
+      ? "Vercel Dashboard → Settings → Environment Variables에 SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY를 등록한 뒤 Redeploy 하세요. (.env는 GitHub에 올라가지 않습니다.)"
+      : "프로젝트 루트에 .env 파일을 만들고 vercel dev를 재시작하세요.";
     return res.status(500).json({
-      error: `환경 변수가 설정되지 않았습니다: ${missing.join(", ")}. 프로젝트 루트에 .env 파일을 만들고 vercel dev를 재시작하세요.`,
+      error: `환경 변수가 설정되지 않았습니다: ${missing.join(", ")}. ${hint}`,
     });
   }
 
