@@ -35,6 +35,11 @@ function loadEnvFile() {
 
 loadEnvFile();
 
+function normalizeSupabaseUrl(url) {
+  if (!url) return url;
+  return url.replace(/\/rest\/v1\/?$/, "").replace(/\/$/, "");
+}
+
 function getMissingSupabaseEnv() {
   const missing = [];
   if (!process.env.SUPABASE_URL) missing.push("SUPABASE_URL");
@@ -42,4 +47,11 @@ function getMissingSupabaseEnv() {
   return missing;
 }
 
-module.exports = { getMissingSupabaseEnv, loadEnvFile };
+function getSupabaseConfig() {
+  return {
+    url: normalizeSupabaseUrl(process.env.SUPABASE_URL),
+    key: process.env.SUPABASE_SERVICE_ROLE_KEY,
+  };
+}
+
+module.exports = { getMissingSupabaseEnv, getSupabaseConfig, loadEnvFile };

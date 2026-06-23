@@ -1,13 +1,12 @@
 const { createClient } = require("@supabase/supabase-js");
-const { getMissingSupabaseEnv } = require("./_env");
+const { getMissingSupabaseEnv, getSupabaseConfig } = require("./_env");
 
 const MIN = 1;
 const MAX = 45;
 const PICK = 6;
 
 function getSupabase() {
-  const url = process.env.SUPABASE_URL;
-  const key = process.env.SUPABASE_SERVICE_ROLE_KEY;
+  const { url, key } = getSupabaseConfig();
   if (!url || !key) return null;
   return createClient(url, key);
 }

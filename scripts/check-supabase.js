@@ -1,7 +1,7 @@
 require("../api/_env");
 
 const { createClient } = require("@supabase/supabase-js");
-const { getMissingSupabaseEnv } = require("../api/_env");
+const { getMissingSupabaseEnv, getSupabaseConfig } = require("../api/_env");
 
 const missing = getMissingSupabaseEnv();
 if (missing.length) {
@@ -14,10 +14,8 @@ if (missing.length) {
   process.exit(1);
 }
 
-const supabase = createClient(
-  process.env.SUPABASE_URL,
-  process.env.SUPABASE_SERVICE_ROLE_KEY
-);
+const { url, key } = getSupabaseConfig();
+const supabase = createClient(url, key);
 
 (async () => {
   const testNumbers = [1, 7, 14, 21, 28, 35];
@@ -44,6 +42,6 @@ const supabase = createClient(
   await supabase.from("lotto_draws").delete().eq("id", data.id);
 
   console.log("✅ Supabase 연결 및 저장 테스트 성공");
-  console.log("   URL:", process.env.SUPABASE_URL);
+  console.log("   URL:", url);
   console.log("   테스트 row id:", data.id, "(삭제됨)");
 })();
