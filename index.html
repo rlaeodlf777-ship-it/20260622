@@ -589,6 +589,16 @@
       border: 1px solid var(--error-border);
     }
 
+    .save-toast {
+      text-align: center;
+      font-size: 0.85rem;
+      color: var(--green);
+      margin-top: 0.75rem;
+      min-height: 1.25rem;
+    }
+
+    .save-toast.error { color: var(--error-color); }
+
     footer {
       margin-top: auto;
       padding: 1.5rem;
@@ -781,6 +791,8 @@
         <button class="btn btn-secondary" id="clear">초기화</button>
       </div>
 
+      <p class="save-toast" id="randomSaveStatus" aria-live="polite"></p>
+
       <div class="results" id="results">
         <div class="empty-state">
           <div class="icon">🍀</div>
@@ -934,6 +946,25 @@
 
     const MIN = 1, MAX = 45, PICK = 6;
 
+    function showSaveStatus(el, message, isError = false) {
+      if (!el) return;
+      el.textContent = message;
+      el.classList.toggle("error", isError);
+    }
+
+    async function saveLottoDraws(draws) {
+      const res = await fetch("/api/save-lotto", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ draws }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        throw new Error(data.error || "번호 저장에 실패했습니다.");
+      }
+      return data;
+    }
+
     function ballColor(n) {
       if (n <= 10) return "yellow";
       if (n <= 20) return "blue";
@@ -996,16 +1027,37 @@
       return row;
     }
 
-    document.getElementById("generate").addEventListener("click", () => {
+    document.getElementById("generate").addEventListener("click", async () => {
       const count = parseInt(document.getElementById("count").value, 10);
       const container = document.getElementById("results");
+      const saveStatus = document.getElementById("randomSaveStatus");
+      const generateBtn = document.getElementById("generate");
+      const sets = [];
+
       container.innerHTML = "";
+      showSaveStatus(saveStatus, "");
+
       for (let i = 0; i < count; i++) {
-        container.appendChild(renderRow(generateSet(), i));
+        const numbers = generateSet();
+        sets.push({ numbers, source: "random" });
+        container.appendChild(renderRow(numbers, i));
+      }
+
+      generateBtn.disabled = true;
+      showSaveStatus(saveStatus, "저장 중...");
+
+      try {
+        const result = await saveLottoDraws(sets);
+        showSaveStatus(saveStatus, `${result.saved}게임이 Supabase에 저장되었습니다.`);
+      } catch (err) {
+        showSaveStatus(saveStatus, err.message, true);
+      } finally {
+        generateBtn.disabled = false;
       }
     });
 
     document.getElementById("clear").addEventListener("click", () => {
+      showSaveStatus(document.getElementById("randomSaveStatus"), "");
       document.getElementById("results").innerHTML = `
         <div class="empty-state">
           <div class="icon">🍀</div>
@@ -1172,6 +1224,16 @@
         }
 
         appendBotBubble(data);
+
+        try {
+          await saveLottoDraws([{
+            numbers: data.numbers,
+            source: "saju",
+            metadata: { gender, birthDate },
+          }]);
+        } catch {
+          appendError("추천 번호는 표시되었지만 Supabase 저장에 실패했습니다.");
+        }
       } catch {
         removeLoading();
         appendError("서버에 연결할 수 없습니다. Vercel에 배포 후 이용해 주세요.");
